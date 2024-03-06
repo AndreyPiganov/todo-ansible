@@ -3,9 +3,17 @@
   vars:
     users:
       - {name: AndreyPiganov, email: andrey.piganov@mail.ru}
-    github: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
-    token: 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
+    git_token: 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
     user: andrey
+    nginx: {dir: /etc/nginx, cfg: nginx.conf, site: static-site.conf} # static-secure-site.conf.j2 static-site.conf
+    git: 
+      - {ssh: git@github.com:prjctz/todo-back.git, dir: ~/backend, version_rep: main, name: todo-back}
+      # - {ssh: git@github.com:AndreyPiganov/test.git, dir: ~/frontend, version_rep: main, name: todo-front}
+    build_dir: /var/www/build
+    key_file: ~/.ssh/key
+    sites:
+      - sites-enabled
+      - sites-available
   tasks:
     - name: update apt-get
       apt:
@@ -100,15 +108,17 @@
       tags: docker
     - name: Generate SSH key pair
       openssh_keypair:
-        path: ~/.ssh/key
+        path: "{{key_file}}"
     - name: Read SSH public key to authorize
-      ansible.builtin.shell: cat ~/.ssh/key.pub
+      ansible.builtin.shell: "cat {{key_file}}.pub"
       register: ssh_pub_key
     - name: Add SSH key to GitHub
       community.general.github_key:
-        token: "{{token}}"
-        name: test
+        token: "{{git_token}}"
+        name: todo-back
         pubkey: "{{ ssh_pub_key.stdout}}"
+      vars:
+        git_token: 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 # Засекреченный Git токен для вашего ssh ключа(для автоматизации)
     # - name: Install docker-compose
     #   get_url:
     #     url: https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64
@@ -122,13 +132,14 @@
     ###############
     - name: Remove default nginx configuration
       file:
-        path: /etc/nginx/sites-enabled/default
+        path: "{{nginx.dir}}/{{item}}/default"
         state: absent
+      loop: "{{sites}}"
       become: yes
     - name: Add nginx configuration
-      copy:
-        src: files/static-site.conf
-        dest: /etc/nginx/sites-available/
+      template:
+        src: "templates/{{nginx.site}}"
+        dest: "{{nginx.dir}}/sites-available/static-site.conf"
         owner: "{{ user }}"
         group: root
         mode: '0644'
@@ -136,8 +147,8 @@
       notify: Reload Nginx
     - name: Enable website configuration
       file:
-        src: /etc/nginx/sites-available/static-site.conf
-        dest: /etc/nginx/sites-enabled/static-site.conf
+        src: "{{nginx.dir}}/sites-available/static-site.conf"
+        dest: "{{nginx.dir}}/sites-enabled/static-site.conf"
         state: link
       become: yes
       notify: Reload Nginx
@@ -171,26 +182,32 @@
       ##########
     - name: create directory for backend
       file:
-        path: ~/backend
+        path: "{{item.dir}}"
         state: directory
+      loop: "{{git}}"
     - name: Add GitHub to known hosts
       known_hosts:
-        name: github.com
-        key: "{{github}}"
+        name: "{{item}}"
+        key: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
         path: ~/.ssh/known_hosts
         state: present
+      loop: 
+        - github.com
     - name: init project in git
       git:
-        repo: git@github.com:prjctz/todo-back.git
-        dest: ~/backend
-        version: test ## Менять ветку если нужно
-        key_file: ~/.ssh/key
+        repo: "{{item.ssh}}"
+        dest: "{{item.dir}}"
+        version: "{{item.version_rep}}" ## Менять ветку если нужно
+        key_file: "{{key_file}}"
         update: yes
+      loop: "{{git}}"
+      register: git_clone_result
     - name: install nodejs dependencies
       npm:
-        path: ~/backend
+        path: "{{item.dir}}"
         state: present
         global: no
+      loop: "{{git}}"
     - name: delete html in www
       file: 
         path: /var/www/html
@@ -198,32 +215,57 @@
       become: yes
     - name: create build in www
       file:
-        path: /var/www/build
+        path: "{{build_dir}}"
         state: directory
       become: yes
-    - name: Build app locally
-      shell: npm run build
-      args: 
-        chdir: ~/todo-back/
-      delegate_to: 127.0.0.1
-    - name: Copy build to server
-      copy:
-        src: ~/todo-back/build/
-        dest: /var/www/build/
-        owner: www-data
-        group: www-data
-        mode: 0644
-      become: yes
+    ############# ADD BUILD
+    # - name: Build app locally
+    #   shell: npm run build
+    #   args: 
+    #     chdir: ~/test/
+    #   delegate_to: 127.0.0.1
+    # loop: 
+    # - name: Copy build to server
+    #   copy:
+    #     src: ~/test/build/
+    #     dest: "{{build_dir}}/"
+    #     owner: www-data
+    #     group: www-data
+    #     mode: 0644
+    #   become: yes
+    ############# ADD BUILD
     - name: add default html in build # is not required task
       template:
         src: files/index.html
         dest: /var/www/build/
       become: yes
-    - name: start Docker-compose 
+    - name: Stop and remove containers
+      docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop: 
+        - todo-server
+        - todo-mongo
+      ignore_errors: yes
+      become: yes
+      when: git_clone_result.changed
+    - name: delete images
+      docker_image:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - todo-back_api-server
+      become: yes
+      ignore_errors: yes
+      when: git_clone_result.changed
+    - name: start Docker-compose  # Запуск docker-compose 
       community.general.docker_compose:
-        project_src: ~/backend
-        project_name: todo-back
+        project_src: "{{item.dir}}/"
+        project_name: "{{item.name}}"
         state: present
+      become: yes
+      loop: "{{git}}"
+      when: git_clone_result.changed
   handlers:
     - name: Reload Nginx
       service:
