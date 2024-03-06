@@ -254,7 +254,7 @@
         name: "{{ item }}"
         state: absent
       loop:
-        - todo-back_api-server
+        - backend_api-server
       become: yes
       ignore_errors: yes
       when: git_clone_result.changed
