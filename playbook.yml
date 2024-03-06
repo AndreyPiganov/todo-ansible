@@ -185,7 +185,7 @@
         path: "{{item.dir}}"
         state: directory
       loop: "{{git}}"
-    - name: Add GitHub to known hosts
+    - name: Add to known hosts
       known_hosts:
         name: "{{item}}"
         key: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
