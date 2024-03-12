@@ -5,7 +5,7 @@
       - {name: AndreyPiganov, email: andrey.piganov@mail.ru}
     git_token: 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
     user: andrey
-    nginx: {dir: /etc/nginx, cfg: nginx.conf, site: static-site.conf} # static-secure-site.conf.j2 static-site.conf
+    nginx: {dir: /etc/nginx, cfg: nginx.conf, site: static-secure-site.conf.j2} # static-secure-site.conf.j2 static-site.conf
     git: 
       - {ssh: git@github.com:prjctz/todo-back.git, dir: ~/backend, version_rep: main, name: todo-back}
       # - {ssh: git@github.com:AndreyPiganov/test.git, dir: ~/frontend, version_rep: main, name: todo-front}
@@ -153,32 +153,32 @@
       become: yes
       notify: Reload Nginx
       ########     Создание пользователей если нужно 
-    - name: create users
-      ansible.builtin.user:
-        generate_ssh_key: yes
-        ssh_key_bits: 2048
-        ssh_key_file: .ssh/id_rsa
-        name: "{{item.name}}"
-        state: present
-        append: yes
-        create_home: yes
-      become: yes
-      loop: "{{users}}"
-    - name: add configs for users 
-      ansible.builtin.template:
-        src: templates/.gitconfig.j2
-        dest: "/home/{{item.name}}/.gitconfig"
-        owner: "{{item.name}}"
-        group: "{{item.name}}"
-      loop: "{{users}}"
-      become: yes
-    - name: create auth keys each users
-      authorized_key:
-        user: "{{item.name}}"
-        key: "{{lookup('file', 'files/my_key.pub')}}"
-        state: present
-      loop: "{{users}}"
-      become: yes
+    # - name: create users
+    #   ansible.builtin.user:
+    #     generate_ssh_key: yes
+    #     ssh_key_bits: 2048
+    #     ssh_key_file: .ssh/id_rsa
+    #     name: "{{item.name}}"
+    #     state: present
+    #     append: yes
+    #     create_home: yes
+    #   become: yes
+    #   loop: "{{users}}"
+    # - name: add configs for users 
+    #   ansible.builtin.template:
+    #     src: templates/.gitconfig.j2
+    #     dest: "/home/{{item.name}}/.gitconfig"
+    #     owner: "{{item.name}}"
+    #     group: "{{item.name}}"
+    #   loop: "{{users}}"
+    #   become: yes
+    # - name: create auth keys each users
+    #   authorized_key:
+    #     user: "{{item.name}}"
+    #     key: "{{lookup('file', 'files/my_key.pub')}}"
+    #     state: present
+    #   loop: "{{users}}"
+    #   become: yes
       ##########
     - name: create directory for backend
       file:
@@ -258,14 +258,14 @@
       become: yes
       ignore_errors: yes
       when: git_clone_result.changed
-    - name: start Docker-compose  # Запуск docker-compose 
-      community.general.docker_compose:
-        project_src: "{{item.dir}}/"
-        project_name: "{{item.name}}"
-        state: present
-      become: yes
-      loop: "{{git}}"
-      when: git_clone_result.changed
+    # - name: start Docker-compose  # Запуск docker-compose 
+    #   community.general.docker_compose:
+    #     project_src: "{{item.dir}}/"
+    #     project_name: "{{item.name}}"
+    #     state: present
+    #   become: yes
+    #   loop: "{{git}}"
+    #   when: git_clone_result.changed
   handlers:
     - name: Reload Nginx
       service:
