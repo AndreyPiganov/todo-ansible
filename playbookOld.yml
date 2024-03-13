@@ -1,0 +1,274 @@
+- hosts: backservers
+  gather_facts: yes
+  vars:
+    users:
+      - {name: AndreyPiganov, email: andrey.piganov@mail.ru}
+    git_token: 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
+    user: andrey
+    nginx: {dir: /etc/nginx, cfg: nginx.conf, site: static-secure-site.conf.j2} # static-secure-site.conf.j2 static-site.conf
+    git: 
+      - {ssh: git@github.com:prjctz/todo-back.git, dir: ~/backend, version_rep: main, name: todo-back}
+      # - {ssh: git@github.com:AndreyPiganov/test.git, dir: ~/frontend, version_rep: main, name: todo-front}
+    build_dir: /var/www/build
+    key_file: ~/.ssh/key
+    sites:
+      - sites-enabled
+      - sites-available
+  tasks:
+    - name: update apt-get
+      apt:
+        force_apt_get: yes
+        state: present
+      tags: apt
+    - name: add GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      become: yes
+    - name: add docker repository to apt
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+      become: yes
+    - name: install dependencies
+      apt:
+        name: "{{item}}"
+        state: present
+        update_cache: yes
+      become: yes
+      loop:
+        - openssh-server
+        - git
+        - make
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg-agent
+        - software-properties-common
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - docker-compose
+        - nginx
+        - npm
+      tags: apt
+    - name: Check if nvm is installed
+      stat:
+        path: "~/.nvm"
+      register: nvm_installed
+      tags: [nvm,apt]
+    - name: Check if Node.js is installed
+      stat:
+        path: "~/.nvm/versions/node"
+      register: node_check
+    - name: Install nvm
+      git: 
+        repo: https://github.com/creationix/nvm.git 
+        dest: ~/.nvm 
+        version: v0.33.11
+        update: yes
+      when: not nvm_installed.stat.exists
+      tags: [nvm,apt]
+    - name: Source nvm in ~/.{{ item }}
+      lineinfile:
+        dest: ~/.{{ item }}
+        line: source ~/.nvm/nvm.sh
+        create: yes
+      tags: nvm
+      loop:
+        - bashrc
+        - profile
+      when: not nvm_installed.stat.exists
+      tags: [nvm,apt]
+    - name: Install Node.js using nvm
+      shell: "source ~/.nvm/nvm.sh && nvm install {{ node_version }} && nvm use {{ node_version }}" 
+      args:
+        executable: /bin/bash # выбираем оболочку bash в связи с особенностями
+      vars:
+        node_version: "--lts"
+      when: not node_check.stat.exists
+      tags: [nvm,apt]
+    - name: check docker is active
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      tags: docker
+    - name: Ensure group "docker" exists
+      ansible.builtin.group:
+        name: docker
+        state: present
+      tags: docker
+    - name: adding user to docker and root group
+      user:
+        name: andrey
+        groups: [docker,root]
+        append: yes
+      become: yes
+      tags: docker
+    - name: Generate SSH key pair
+      openssh_keypair:
+        path: "{{key_file}}"
+    - name: Read SSH public key to authorize
+      ansible.builtin.shell: "cat {{key_file}}.pub"
+      register: ssh_pub_key
+    - name: Add SSH key to GitHub
+      community.general.github_key:
+        token: "{{git_token}}"
+        name: todo-back
+        pubkey: "{{ ssh_pub_key.stdout}}"
+      vars:
+        git_token: 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 # Засекреченный Git токен для вашего ssh ключа(для автоматизации)
+    # - name: Install docker-compose
+    #   get_url:
+    #     url: https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64
+    #     dest: /usr/local/bin/docker-compose
+    #     mode: 'u+x,g+x'
+    # - name: Change file ownership, group and permissions
+    #   ansible.builtin.file:
+    #     path: /usr/local/bin/docker-compose
+    #     owner: andrey
+    #     group: andrey
+    ###############
+    - name: Remove default nginx configuration
+      file:
+        path: "{{nginx.dir}}/{{item}}/default"
+        state: absent
+      loop: "{{sites}}"
+      become: yes
+    - name: Add nginx configuration
+      template:
+        src: "templates/{{nginx.site}}"
+        dest: "{{nginx.dir}}/sites-available/static-site.conf"
+        owner: "{{ user }}"
+        group: root
+        mode: '0644'
+      become: yes
+      notify: Reload Nginx
+    - name: Enable website configuration
+      file:
+        src: "{{nginx.dir}}/sites-available/static-site.conf"
+        dest: "{{nginx.dir}}/sites-enabled/static-site.conf"
+        state: link
+      become: yes
+      notify: Reload Nginx
+      ########     Создание пользователей если нужно 
+    # - name: create users
+    #   ansible.builtin.user:
+    #     generate_ssh_key: yes
+    #     ssh_key_bits: 2048
+    #     ssh_key_file: .ssh/id_rsa
+    #     name: "{{item.name}}"
+    #     state: present
+    #     append: yes
+    #     create_home: yes
+    #   become: yes
+    #   loop: "{{users}}"
+    # - name: add configs for users 
+    #   ansible.builtin.template:
+    #     src: templates/.gitconfig.j2
+    #     dest: "/home/{{item.name}}/.gitconfig"
+    #     owner: "{{item.name}}"
+    #     group: "{{item.name}}"
+    #   loop: "{{users}}"
+    #   become: yes
+    # - name: create auth keys each users
+    #   authorized_key:
+    #     user: "{{item.name}}"
+    #     key: "{{lookup('file', 'files/my_key.pub')}}"
+    #     state: present
+    #   loop: "{{users}}"
+    #   become: yes
+      ##########
+    - name: create directory for backend
+      file:
+        path: "{{item.dir}}"
+        state: directory
+      loop: "{{git}}"
+    - name: Add to known hosts
+      known_hosts:
+        name: "{{item}}"
+        key: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
+        path: ~/.ssh/known_hosts
+        state: present
+      loop: 
+        - github.com
+    - name: init project in git
+      git:
+        repo: "{{item.ssh}}"
+        dest: "{{item.dir}}"
+        version: "{{item.version_rep}}" ## Менять ветку если нужно
+        key_file: "{{key_file}}"
+        update: yes
+      loop: "{{git}}"
+      register: git_clone_result
+    - name: install nodejs dependencies
+      npm:
+        path: "{{item.dir}}"
+        state: present
+        global: no
+      loop: "{{git}}"
+    - name: delete html in www
+      file: 
+        path: /var/www/html
+        state: absent
+      become: yes
+    - name: create build in www
+      file:
+        path: "{{build_dir}}"
+        state: directory
+      become: yes
+    ############# ADD BUILD
+    # - name: Build app locally
+    #   shell: npm run build
+    #   args: 
+    #     chdir: ~/test/
+    #   delegate_to: 127.0.0.1
+    # loop: 
+    # - name: Copy build to server
+    #   copy:
+    #     src: ~/test/build/
+    #     dest: "{{build_dir}}/"
+    #     owner: www-data
+    #     group: www-data
+    #     mode: 0644
+    #   become: yes
+    ############# ADD BUILD
+    - name: add default html in build # is not required task
+      template:
+        src: files/index.html
+        dest: /var/www/build/
+      become: yes
+    - name: Stop and remove containers
+      docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop: 
+        - todo-server
+        - todo-mongo
+      ignore_errors: yes
+      become: yes
+      when: git_clone_result.changed
+    - name: delete images
+      docker_image:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - backend_api-server
+      become: yes
+      ignore_errors: yes
+      when: git_clone_result.changed
+    # - name: start Docker-compose  # Запуск docker-compose 
+    #   community.general.docker_compose:
+    #     project_src: "{{item.dir}}/"
+    #     project_name: "{{item.name}}"
+    #     state: present
+    #   become: yes
+    #   loop: "{{git}}"
+    #   when: git_clone_result.changed
+  handlers:
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+      become: yes
