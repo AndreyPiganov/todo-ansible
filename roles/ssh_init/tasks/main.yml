@@ -9,6 +9,6 @@
 - name: Add SSH key to GitHub
   github_key:
     token: "{{git_token}}"
-    name: todo-back
+    name: test
     pubkey: "{{ ssh_pub_key.stdout}}"
   tags: ssh_init

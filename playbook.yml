@@ -3,13 +3,14 @@
   hosts: all
   become: yes
   roles:
-    - docker_add
+    # - docker_add
     - apt_install
     - nvm_install
-    - docker
+    # - docker
     - ssh_init
     - nginx
     # - user_creation
     - git_clone
-    - build_add
-    - compose
+    # - build_add
+    # - compose
+    - mongodb
