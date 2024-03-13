@@ -1,0 +1,22 @@
+- name: Stop and remove containers
+  docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{containers}}"
+  ignore_errors: true
+  when: git_clone_result.changed
+- name: delete images
+  docker_image:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{images}}"
+  ignore_errors: true
+  when: git_clone_result.changed
+    # - name: start Docker-compose  # Запуск docker-compose 
+    #   community.general.docker_compose:
+    #     project_src: "{{item.dir}}/"
+    #     project_name: "{{item.name}}"
+    #     state: present
+    #   become: yes
+    #   loop: "{{git}}"
+    #   when: git_clone_result.changed

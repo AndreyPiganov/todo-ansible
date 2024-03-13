@@ -1,0 +1,21 @@
+---
+# - name: Build app locally
+#   shell: npm run build
+#   args: 
+#     chdir: ~/test/
+#     delegate_to: 127.0.0.1
+#   # loop: 
+#    tags: build_add
+# - name: Copy build to server
+#   copy:
+#     src: ~/test/build/
+#     dest: "{{build_dir}}/"
+#     owner: www-data
+#     group: www-data
+#     mode: 0644
+#   tags: build_add
+- name: add default html in build
+  template:
+    src: files/index.html
+    dest: /var/www/build/
+  tags: build_add

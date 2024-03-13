@@ -1,0 +1,35 @@
+- name: Check if nvm is installed
+  stat:
+    path: "~/.nvm"
+  register: nvm_installed
+  tags: nvm_install
+- name: Check if Node.js is installed
+  stat:
+    path: "~/.nvm/versions/node"
+  register: node_check
+- name: Install nvm
+  git: 
+    repo: https://github.com/creationix/nvm.git 
+    dest: ~/.nvm 
+    version: v0.33.11
+    update: yes
+  when: not nvm_installed.stat.exists
+  tags: nvm_install
+- name: Source nvm in ~/.{{ item }}
+  lineinfile:
+    dest: ~/.{{ item }}
+    line: source ~/.nvm/nvm.sh
+    create: yes
+  loop:
+    - bashrc
+    - profile
+  when: not nvm_installed.stat.exists
+  tags: nvm_install
+- name: Install Node.js using nvm
+  shell: "source ~/.nvm/nvm.sh && nvm install {{ node_version }} && nvm use {{ node_version }}" 
+  args:
+    executable: /bin/bash # выбираем оболочку bash в связи с особенностями
+  vars:
+    node_version: "--lts"
+  when: not node_check.stat.exists
+  tags: nvm_install

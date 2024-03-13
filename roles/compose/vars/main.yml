@@ -1,0 +1,7 @@
+---
+git_clone_result: "{{git_clone_result}}"
+containers:
+  - todo-server
+  - todo-mongo
+images:
+  - backend_api-server

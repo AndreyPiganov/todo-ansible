@@ -1,0 +1,19 @@
+- name: Remove default nginx configuration
+  file:
+    path: "{{nginx.dir}}/{{item}}/default"
+    state: absent
+  loop: "{{sites}}"
+- name: Add nginx configuration
+  template:
+    src: "templates/{{nginx.site}}"
+    dest: "{{nginx.dir}}/sites-available/static-site.conf"
+    owner: "{{ user }}"
+    group: root
+    mode: '0644'
+  notify: Reload Nginx
+- name: Enable website configuration
+  file:
+    src: "{{nginx.dir}}/sites-available/static-site.conf"
+    dest: "{{nginx.dir}}/sites-enabled/static-site.conf"
+    state: link
+  notify: Reload Nginx

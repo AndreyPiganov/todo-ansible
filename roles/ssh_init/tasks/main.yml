@@ -1,0 +1,14 @@
+- name: Generate SSH key pair
+  openssh_keypair:
+    path: "{{key_file}}"
+  tags: ssh_init
+- name: Read SSH public key to authorize
+  shell: "cat {{key_file}}.pub"
+  register: ssh_pub_key
+  tags: ssh_init
+- name: Add SSH key to GitHub
+  github_key:
+    token: "{{git_token}}"
+    name: todo-back
+    pubkey: "{{ ssh_pub_key.stdout}}"
+  tags: ssh_init

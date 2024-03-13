@@ -1,0 +1,43 @@
+---
+- name: create directory for backend
+  file:
+    path: "{{item.dir}}"
+    state: directory
+  loop: "{{git}}"
+  tags: git_clone
+- name: Add to known hosts
+  known_hosts:
+    name: "{{item}}"
+    key: "{{ lookup('pipe', 'ssh-keyscan -t rsa github.com') }}"
+    path: ~/.ssh/known_hosts
+    state: present
+  loop: 
+    - github.com
+  tags: git_clone
+- name: init project in git
+  git:
+    repo: "{{item.ssh}}"
+    dest: "{{item.dir}}"
+    version: "{{item.version_rep}}" ## Менять ветку если нужно
+    key_file: "{{key_file}}"
+    update: yes
+  loop: "{{git}}"
+  register: git_clone_result
+  tags: git_clone
+- name: install nodejs dependencies
+  npm:
+    path: "{{item.dir}}"
+    state: present
+    global: no
+  loop: "{{git}}"
+  tags: git_clone
+- name: delete html in www
+  file: 
+    path: /var/www/html
+    state: absent
+  tags: git_clone
+- name: create build in www
+  file:
+    path: "{{build_dir}}"
+    state: directory
+  tags: git_clone

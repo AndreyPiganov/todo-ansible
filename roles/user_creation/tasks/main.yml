@@ -1,0 +1,27 @@
+---
+- name: create users
+  user:
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+    name: "{{item.name}}"
+    state: present
+    append: yes
+    create_home: yes
+    loop: "{{users}}"
+  tags: user_creation
+- name: add configs for users 
+  template:
+    src: templates/.gitconfig.j2
+    dest: "/home/{{item.name}}/.gitconfig"
+    owner: "{{item.name}}"
+    group: "{{item.name}}"
+  loop: "{{users}}"
+  tags: user_creation
+- name: create auth keys each users
+  authorized_key:
+    user: "{{item.name}}"
+    key: "{{lookup('file', 'files/my_key.pub')}}"
+    state: present
+  loop: "{{users}}"
+  tags: user_creation

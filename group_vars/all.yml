@@ -1,0 +1,11 @@
+---
+user: andrey
+nginx: {dir: /etc/nginx, cfg: nginx.conf, site: static-secure-site.conf.j2} # static-secure-site.conf.j2 static-site.conf
+git: 
+  - {ssh: git@github.com:prjctz/todo-back.git, dir: ~/backend, version_rep: main, name: todo-back}
+# - {ssh: git@github.com:AndreyPiganov/test.git, dir: ~/frontend, version_rep: main, name: todo-front}
+build_dir: /var/www/build
+key_file: ~/.ssh/key
+sites:
+  - sites-enabled
+  - sites-available

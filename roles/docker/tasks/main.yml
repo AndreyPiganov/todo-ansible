@@ -1,0 +1,17 @@
+- name: check docker is active
+  service:
+    name: docker
+    state: started
+    enabled: yes
+  tags: docker
+- name: Ensure group "docker" exists
+  group:
+    name: docker
+    state: present
+  tags: docker
+- name: adding user to docker and root group
+  user:
+    name: andrey
+    groups: [docker,root]
+    append: yes
+  tags: docker
