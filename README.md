@@ -1,4 +1,4 @@
-# todo-ansible
+# Ansible(На примере конфига для todo приложения)
 Конфигурация ansible для сервера на Yandex Cloud
 
 
